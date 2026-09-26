@@ -1,0 +1,42 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+  "dev": "node --watch src/server.js",
+  "start": "node src/server.js",
+  "db:generate": "drizzle-kit generate",
+  "db:migrate": "drizzle-kit migrate",
+  "db:push": "drizzle-kit push",
+  "db:studio": "drizzle-kit studio",
+  "test": "node --experimental-vm-modules node_modules/.bin/jest",
+  "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
+  "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage",
+  "lint": "eslint src/",
+  "lint:fix": "eslint src/ --fix",
+  "format": "prettier --write \"src/**/*.js\""
+},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.21.0",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^18.0.4",
+    "drizzle-orm": "1.0.0-rc.4",
+    "express": "^5.2.1",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "1.0.0-rc.4",
+    "tsx": "^4.23.15"
+  }
+}
