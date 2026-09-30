@@ -1,9 +1,10 @@
-import {pgTable , uuid , varchar , text , integer} from "drizzle-orm/pg-core"
+import { pgTable, uuid, varchar, text, integer, timestamp } from "drizzle-orm/pg-core";
 
-export const categories = pgTable("category", {
-    id : uuid("id").defaultRandom().primaryKey(),
-    name : varchar("name", {length:50}).notNull().unique(),
-    slug : varchar("slug" , {lenght : 120}).notNull().unique(),
-    description : text("description"),
-    postCount : integer("post_count").notNull().default(0),
-})
+export const categories = pgTable("categories", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: varchar("name", { length: 50 }).notNull().unique(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  description: text("description").default(""),
+  postCount: integer("post_count").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

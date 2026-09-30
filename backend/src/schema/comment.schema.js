@@ -1,4 +1,4 @@
-import { PgTable , uuid , varchar , text , timestamp, pgTable } from "drizzle-orm/pg-core";
+import { uuid , varchar , text , timestamp, pgTable } from "drizzle-orm/pg-core";
 
 import {posts} from "./post.schema.js"
 

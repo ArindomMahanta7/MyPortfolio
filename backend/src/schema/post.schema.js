@@ -27,7 +27,7 @@ export const posts = pgTable("posts", {
     .notNull()
     .unique(),
 
-  excerpt: text("excerpt"),
+  excerpt: text("excerpt").notNull(),
 
   content: text("content")
     .notNull(),
@@ -48,9 +48,9 @@ export const posts = pgTable("posts", {
 
   readingTime: integer("reading_time"),
 
-  seoTitle: varchar("seo_title", {length: 200,}),
+  seoTitle: varchar("seo_title", {length: 60,}),
 
-  seoDescription: varchar("seo_description", {length: 320,}),
+  seoDescription: text("seo_description"),
 
   ogImage: text("og_image"),
 

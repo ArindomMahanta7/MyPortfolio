@@ -26,7 +26,7 @@ export const projects = pgTable("projects", {
     .notNull()
     .unique(),
 
-  description: text("description"),
+  description: text("description").notNull(),
 
   longDescription: text("long_description"),
 
@@ -50,7 +50,7 @@ export const projects = pgTable("projects", {
 
   category: varchar("category", {
     length: 100,
-  }),
+  }).notNull(),
 
   isFeatured: boolean("is_featured")
     .notNull()

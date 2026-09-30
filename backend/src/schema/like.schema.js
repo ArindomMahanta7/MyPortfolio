@@ -1,4 +1,4 @@
-import { PgTable , uuid , varchar , timestamp , unique , index, pgTable } from "drizzle-orm/pg-core";
+import { uuid , varchar , timestamp , unique , index, pgTable } from "drizzle-orm/pg-core";
 
 import {posts} from "./post.schema.js"
 
@@ -18,7 +18,7 @@ export const postLikes = pgTable("post_likes" , {
         table.postId , 
         table.ipAddress
     ),
-    index("post_likes_post_id_idx").n(
+    index("post_likes_post_id_idx").on(
         table.postId
     ),
 ]

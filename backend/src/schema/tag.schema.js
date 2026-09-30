@@ -1,8 +1,9 @@
-import {pgTable,uuid,varchar,text,integer} from "drizzle-orm/pg-core"
+import { pgTable,uuid,varchar,timestamp } from "drizzle-orm/pg-core"
 
 export const tags = pgTable("tags", {
     id : uuid("id").defaultRandom().primaryKey(),
     name : varchar("name",{length:50}).notNull().unique(),
     slug : varchar("slug",{length:60}).notNull().unique(),    
+    createdAt : timestamp("created_at").notNull().defaultNow(),
 })
  
