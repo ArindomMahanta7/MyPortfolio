@@ -14,7 +14,7 @@ Auth header: `Authorization: Bearer <access_token>`
 | Likes | Anonymous, IP-based toggle (1 like per post) | — |
 | Comments | Anonymous (name only), visible **instantly** | Delete abusive comments |
 | Contact form | Submit a message | Read inbox / mark read / delete |
-| Newsletter | Subscribe / unsubscribe | View / remove subscribers |
+| Newsletter | Subscribe / unsubscribe | View / remove subscribers **+ send newsletter blasts via Brevo** |
 | Dashboard & uploads | — | Full access |
 
 **Auth exists only for you (single admin).** Visitors never log in anywhere.
@@ -149,7 +149,7 @@ backend/
 |------|-----------|
 | `package.json` | Set `"type": "module"`. Add scripts: `dev` (nodemon), `start`, `db:generate`, `db:migrate`, `db:push`, `db:studio`, `test`, `lint`, `format`. List all runtime and dev dependencies. |
 | `drizzle.config.js` | Point Drizzle Kit at `./src/schema/*.js`, output migrations to `./drizzle/migrations`, dialect `postgresql`, read connection URL from `DATABASE_URL`. |
-| `.env` | Hold all real secrets: `NODE_ENV`, `PORT`, `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRES_IN`, Cloudinary keys, `CLIENT_URL`, optional SMTP vars. Never commit this file. |
+| `.env` | Hold all real secrets: `NODE_ENV`, `PORT`, `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRES_IN`, Cloudinary keys, `CLIENT_URL`, Brevo keys (`BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`), `ADMIN_EMAIL`. Never commit this file. |
 | `.env.example` | Same keys as `.env` but with placeholder values only. This is the template teammates copy from. |
 | `.gitignore` | Ignore `node_modules/`, `.env*`, `uploads/`, `coverage/`, logs, OS junk files. |
 | `.eslintrc.json` | Configure ESLint for ES modules + Node globals; enforce unused-var and error-prone rules. |
@@ -216,7 +216,7 @@ Only two jobs: map method + path to a controller, and attach the right middlewar
 | `project.routes.js` | Public list/featured/by-slug reads; admin create/update/delete behind auth + role check. |
 | `comment.routes.js` | Public: `GET /api/posts/:postId/comments` (all comments, newest first) and `POST /api/posts/:postId/comments` (instant submission, behind `commentLimiter` — 5/hour/IP). Admin: `DELETE /api/admin/comments/:id` behind auth. No approve/spam routes — visibility is instant. |
 | `contact.routes.js` | Public POST submit; admin GET list, PATCH read, DELETE behind auth. |
-| `newsletter.routes.js` | Public subscribe/unsubscribe; admin list/delete behind auth. |
+| `newsletter.routes.js` | Public subscribe/unsubscribe; admin list/delete; **admin `POST /api/admin/newsletter/send`** (the "Send Newsletter" button) — all admin routes behind `authenticate` + `authorize('admin')`. |
 | `analytics.routes.js` | Public/implicit view-recording route; admin dashboard-stats route behind auth. |
 | `upload.routes.js` | Admin-only `POST /api/upload` (Multer + image service) and `DELETE /api/upload/:publicId`. |
 
@@ -231,7 +231,7 @@ Extract request data, call exactly one service method, and send back an `ApiResp
 | `project.controller.js` | Handle list, featured, get-by-slug, create, update, delete. |
 | `comment.controller.js` | Handle public submit (instant), public list-per-post (with `postId` param), and admin delete. No approval handlers exist anymore. |
 | `contact.controller.js` | Handle public submit, admin list (filter unread), mark-as-read, delete. |
-| `newsletter.controller.js` | Handle subscribe, unsubscribe, admin list, admin remove. |
+| `newsletter.controller.js` | Handle subscribe, unsubscribe, admin list, admin remove, and **admin send**: read `{ subject, content }` from the body, call the service, respond with `{ sent, failed }` counts. |
 | `analytics.controller.js` | Handle view recording (pull IP/user-agent/referrer from the request) and returning dashboard stats. |
 
 ### 2.7 `src/services/`
@@ -246,10 +246,10 @@ All business logic and every database call lives here. Each file exports a singl
 | `comment.service.js` | Verify the target post exists and is **published** before inserting; store the comment (name + content) so it is visible immediately; fetch all comments for a post newest-first; delete any comment by id (admin cleanup). Abuse is controlled by the rate limiter (5/hour/IP), not moderation. |
 | `like.service.js` | Toggle a like for `(postId, ipAddress)`: if a row exists → delete it (unlike) and decrement `posts.likeCount`; otherwise insert a row (catch unique-violation races) and increment `likeCount`. Return current `{ liked, likeCount }`. Also expose `hasLiked(postId, ip)` for the status check. |
 | `contact.service.js` | Insert submitted messages; list with pagination and unread filter; mark as read; delete. |
-| `newsletter.service.js` | Subscribe (reactivate unsubscribed rows, reject duplicate active subs); unsubscribe (set status + timestamp); list subscribers with status filter and pagination; remove a subscriber. |
+| `newsletter.service.js` | Subscribe (reactivate unsubscribed rows, reject duplicate active subs); unsubscribe (set status + timestamp); list subscribers with status filter and pagination; remove a subscriber; **`sendNewsletter(subject, content)`**: fetch all `status = 'active'` subscribers, loop and call `email.service` for each, catch per-recipient failures, and return `{ sent, failed }` counts. Rejects with 400 if there are no active subscribers. |
 | `analytics.service.js` | Record a view row (IP, user agent, referrer) and bump `viewCount` on the post/project; compute dashboard stats: totals for posts, projects, comments, active subscribers, unread messages, views in last 30 days, and top 5 posts by views. |
 | `image.service.js` | Upload a buffer to Cloudinary (folder, max 1920×1080, auto quality/format) and return `{ url, publicId }`; delete an image by `publicId`, swallowing/logs failures so deletes never break. |
-| `email.service.js` | Send optional emails (contact notification, newsletter blast) using SMTP config; no-op gracefully if SMTP is not configured. |
+| `email.service.js` | **All outgoing email goes through Brevo's REST API using native `fetch`** (no extra packages). `sendBrevoEmail({ to, toName, subject, html })` → `POST https://api.brevo.com/v3/smtp/email` with `api-key: BREVO_API_KEY` header and sender taken from `BREVO_SENDER_EMAIL`/`BREVO_SENDER_NAME`. Also exposes `sendNewsletterBlast(subject, html, subscribers)` (loop over recipients, count failures) and `sendContactNotification(message)` (notify `ADMIN_EMAIL` of new contact form submissions). Returns early / no-ops gracefully if `BREVO_API_KEY` is unset so the app still boots in development. |
 
 ### 2.8 `src/validators/`
 
@@ -262,7 +262,7 @@ Zod schemas only, one file per resource. Each schema validates `body`, `query`, 
 | `project.validator.js` | Create/update project schema (title ≤150, description ≤500, technologies array min 1, optional URLs, features array, category required, dates optional, isFeatured). |
 | `comment.validator.js` | Comment schema: `name` 1–100 chars (required), `content` 1–2000 chars (required), `postId` uuid in params. **No email field.** |
 | `contact.validator.js` | Contact schema: name ≤100, valid email, subject ≤200, message 1–5000. |
-| `newsletter.validator.js` | Subscribe/unsubscribe schema: valid email in body. |
+| `newsletter.validator.js` | Subscribe/unsubscribe schema: valid email in body. **Send schema:** `subject` (required, 1–150 chars), `content` (required, HTML body). |
 | _(like validation)_ | Lives in `post.validator.js`: `postId` must be a valid uuid in params for the like toggle/status routes. |
 
 ### 2.9 `src/utils/`
@@ -394,7 +394,7 @@ One like per IP per post, toggleable. No cookies, no login — the server keys o
 | PATCH | `/api/admin/contact/:id/read` | Admin | Flips `isRead` to true so it no longer counts as unread; 404 if missing. |
 | DELETE | `/api/admin/contact/:id` | Admin | Deletes a message from the inbox; 404 if missing. |
 
-### 3.9 Newsletter
+### 3.9 Newsletter (sending via Brevo)
 
 | Method | Endpoint | Auth | What It Does |
 |--------|----------|------|--------------|
@@ -402,6 +402,24 @@ One like per IP per post, toggleable. No cookies, no login — the server keys o
 | POST | `/api/newsletter/unsubscribe` | No | Sets the subscriber's status to `unsubscribed` and stamps `unsubscribedAt`. Returns 404 for unknown emails, 400 if already unsubscribed. |
 | GET | `/api/admin/newsletter` | Admin | Lists subscribers with pagination and optional `?status=active\|unsubscribed` filter. |
 | DELETE | `/api/admin/newsletter/:id` | Admin | Permanently removes a subscriber from the list. |
+| POST | `/api/admin/newsletter/send` | Admin | **The "Send Newsletter" button.** Accepts `{ subject, content }` (HTML), fetches all `active` subscribers, sends one email each through Brevo's REST API, and returns `{ sent, failed }` counts. 400 if no active subscribers. |
+
+**How sending works:**
+```
+You publish & review a post → dashboard "Send Newsletter" button
+  → POST /api/admin/newsletter/send  { subject, content }
+  → newsletter.service: SELECT * FROM newsletter WHERE status = 'active'
+  → email.service: POST https://api.brevo.com/v3/smtp/email   (per recipient)
+       headers: { 'api-key': BREVO_API_KEY', 'content-type': 'application/json' }
+       body:    { sender, to, subject, htmlContent }
+  → response: { sent: 42, failed: 1 }
+```
+
+**Notes:**
+- Sending is **manual only** — publishing a post does NOT auto-email anyone (prevents accidental blasts).
+- Brevo free tier = **300 emails/day** — check `sent`/`failed` counts; failures are logged, never crash the request.
+- Requires `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` in `.env` (key from Brevo dashboard → SMTP & API → API Keys).
+- Verify your sender email in Brevo before real sends, otherwise deliverability suffers.
 
 ### 3.10 Uploads
 

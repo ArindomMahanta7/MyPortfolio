@@ -11,7 +11,7 @@ Follow this sequence exactly. Each file only depends on files created **above** 
 | # | File | What To Do |
 |---|------|-----------|
 | 1 | `package.json` | Set `"type": "module"`. Fix scripts (`dev`, `start`, `db:generate`, `db:migrate`, `db:push`, `db:studio`, `test`, `lint`, `format`). Install deps: `express drizzle-orm pg bcrypt jsonwebtoken zod helmet cors express-rate-limit morgan dotenv cloudinary multer slugify` + dev: `jest supertest eslint prettier`. |
-| 2 | `.env` / `.env.example` | Verify all keys exist: `NODE_ENV`, `PORT`, `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRES_IN`, Cloudinary keys, `CLIENT_URL`. |
+| 2 | `.env` / `.env.example` | Verify all keys exist: `NODE_ENV`, `PORT`, `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `JWT_REFRESH_SECRET`, `JWT_REFRESH_EXPIRES_IN`, Cloudinary keys, `CLIENT_URL`, Brevo keys (`BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`), `ADMIN_EMAIL`. |
 | 3 | `.eslintrc.json` | ES modules + Node globals, unused-var and error-prone rules. |
 | 4 | `.prettierrc` | Consistent formatting (semicolons, quotes, width). |
 | 5 | `drizzle.config.js` | Schema `./src/schema/*.js`, out `./drizzle/migrations`, dialect `postgresql`, url from `DATABASE_URL`. |
@@ -162,28 +162,33 @@ Repeat for each feature: **validator → service → controller → routes**, th
 | 61 | `controllers/contact.controller.js` |
 | 62 | `routes/contact.routes.js` |
 
-### 7F. Newsletter
+*(Optional: contact-notification email hooks into `email.service.js` — add after 7F is built.)*
+
+### 7F. Newsletter (sending via Brevo — REST API + native fetch)
 | # | File |
 |---|------|
-| 63 | `validators/newsletter.validator.js` |
-| 64 | `services/newsletter.service.js` |
-| 65 | `controllers/newsletter.controller.js` |
-| 66 | `routes/newsletter.routes.js` |
+| 63 | `services/email.service.js` *(Brevo: `sendBrevoEmail` → POST api.brevo.com/v3/smtp/email with `api-key` header; `sendNewsletterBlast`; `sendContactNotification`)* |
+| 64 | `validators/newsletter.validator.js` *(subscribe/unsubscribe + send schema: subject ≤150, content)* |
+| 65 | `services/newsletter.service.js` *(incl. `sendNewsletter()` → active subscribers → email.service → `{ sent, failed }`)* |
+| 66 | `controllers/newsletter.controller.js` *(incl. admin send handler)* |
+| 67 | `routes/newsletter.routes.js` *(incl. `POST /api/admin/newsletter/send` behind auth)* |
+
+✅ Test: subscribe → send test newsletter (to your own email) → `{ sent, failed }` → unsubscribe.
 
 ### 7G. Uploads
 | # | File |
 |---|------|
-| 67 | `services/image.service.js` |
-| 68 | `routes/upload.routes.js` |
+| 68 | `services/image.service.js` |
+| 69 | `routes/upload.routes.js` |
 
 ✅ Test: upload image → get Cloudinary URL → delete it.
 
 ### 7H. Analytics
 | # | File |
 |---|------|
-| 69 | `services/analytics.service.js` |
-| 70 | `controllers/analytics.controller.js` |
-| 71 | `routes/analytics.routes.js` |
+| 70 | `services/analytics.service.js` |
+| 71 | `controllers/analytics.controller.js` |
+| 72 | `routes/analytics.routes.js` |
 
 ✅ Test: view recording, dashboard stats.
 
@@ -193,10 +198,10 @@ Repeat for each feature: **validator → service → controller → routes**, th
 
 | # | File | What To Do |
 |---|------|-----------|
-| 72 | `tests/setup.js` + `tests/teardown.js` | Connect/clean test database. |
-| 73 | `tests/fixtures/seed.js` | Seed admin, categories, tags, posts, projects. |
-| 74 | `tests/integration/*.test.js` | auth → posts → likes → comments → projects → contact → newsletter. |
-| 75 | `README.md` | Setup steps, env vars, scripts. |
+| 73 | `tests/setup.js` + `tests/teardown.js` | Connect/clean test database. |
+| 74 | `tests/fixtures/seed.js` | Seed admin, categories, tags, posts, projects. |
+| 75 | `tests/integration/*.test.js` | auth → posts → likes → comments → projects → contact → newsletter (incl. send endpoint — mock Brevo in tests). |
+| 76 | `README.md` | Setup steps, env vars, scripts. |
 
 ---
 
