@@ -9,4 +9,4 @@ export * from "./project.schema.js";
 export * from "./contact.schema.js";
 export * from "./newsletter.schema.js";
 export * from "./view.schema.js";
-export * from "./relations.js";
+
